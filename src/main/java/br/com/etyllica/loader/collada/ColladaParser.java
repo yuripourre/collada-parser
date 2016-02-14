@@ -1,7 +1,9 @@
 package br.com.etyllica.loader.collada;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.xml.sax.Attributes;
@@ -17,7 +19,7 @@ import br.com.etyllica.loader.collada.node.VerticesNode;
 
 public class ColladaParser extends DefaultHandler {
 
-	private static final String GEOMETRY = "geometry";
+	private static final String GEOMETRY = "geometry"; //Equivalent to Object in OBJ
 	private static final String SOURCE = "source";
 	private static final String FLOAT_ARRAY = "float_array";
 	private static final String VERTICES = "vertices";
@@ -52,7 +54,9 @@ public class ColladaParser extends DefaultHandler {
     
     private Map<String, GeometryNode> geometries = new HashMap<String, GeometryNode>();
     private Map<Integer, InputNode> inputs = new LinkedHashMap<Integer, InputNode>();
-
+    private Map<String, Integer> sourceOffsets = new HashMap<String, Integer>();
+    private List<Float> vertices = new ArrayList<Float>();
+    
     int partsCount = 0;
     StringBuilder builder = new StringBuilder();
     
@@ -73,6 +77,9 @@ public class ColladaParser extends DefaultHandler {
         } else if(FLOAT_ARRAY.equals(qName)) {
         	currentId = attributes.getValue("id");
         	count = Integer.parseInt(attributes.getValue(ATTRIBUTE_COUNT));
+        	
+        	System.out.println("VertexSize: "+vertices.size());
+        	sourceOffsets.put(sourceId, vertices.size());
         } else if(TRIANGLES.equals(qName)) {
         	currentPrimitive = TRIANGLES;
         	
@@ -125,6 +132,7 @@ public class ColladaParser extends DefaultHandler {
     @Override
     public void characters(char[] ch, int start, int length) throws SAXException {
         String text = new String(ch, start, length);
+        //text = text.replaceAll("\n", "");
         if (!hasText(text)) {
         	return;
         }
@@ -133,7 +141,7 @@ public class ColladaParser extends DefaultHandler {
         	parseFloatArray(text);
         } else if(PRIMITIVE.equals(currentName)) {
         	if(TRIANGLES.equals(currentPrimitive)) {
-        		parseTriangles(text);	
+        		parseTriangles(text);
         	} else if(LINES.equals(currentPrimitive)) {
         		//Ignore for now
         	}
@@ -148,7 +156,7 @@ public class ColladaParser extends DefaultHandler {
 		
 		String string;
 		
-		if (partsCount + partsLength < count*inputsCount*3) {
+		if (partsCount + partsLength < count*inputsCount*3) {			
 			builder.append(text);
 			partsCount += partsLength;
 			return;
@@ -200,20 +208,32 @@ public class ColladaParser extends DefaultHandler {
 		if (partsCount + partsLength < count) {
 			//TODO
 			//Count is always adding 1 part in append
+			String[] parts = text.split(" ");
+			System.out.println("Part[i] "+parts[0]);
+			System.out.println("Part[F] "+parts[parts.length-1]);
 			builder.append(text);
 			partsCount += partsLength;
 			return;
 		} else {
+			String[] parts = text.split(" ");
+			System.out.println("Part[i] "+parts[0]);
+			System.out.println("Part[F] "+parts[parts.length-1]);
 			builder.append(text);
 			string = builder.toString();
 		}
+		
+		partsLength = countParts(text);
+		
+		System.out.println("REAL PARSING: "+(partsCount+partsLength)+"/"+count);
 		
 		String[] parts = string.split(" ");
 		float[] array = new float[count];
 		
 		int i = 0;
 		for(; i < count; i++) {
-			array[i] = Float.parseFloat(parts[i]);
+			float n = Float.parseFloat(parts[i]);
+			array[i] = n;
+			vertices.add(n);
 		}
 		
 		currentGeometry.floatArrays.put(sourceId, array);
@@ -223,7 +243,7 @@ public class ColladaParser extends DefaultHandler {
 	}
 
     private boolean hasText(String string) {
-        string = string.trim();
+        //string = string.trim();
         return !string.isEmpty();
     }
     
