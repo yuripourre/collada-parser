@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import br.com.etyllica.loader.collada.node.*;
+import com.badlogic.gdx.math.Vector3;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
@@ -13,9 +15,6 @@ import org.xml.sax.helpers.DefaultHandler;
 import br.com.abby.core.vbo.Face;
 import br.com.abby.core.vbo.Group;
 import br.com.abby.core.vbo.VBO;
-import br.com.etyllica.loader.collada.node.GeometryNode;
-import br.com.etyllica.loader.collada.node.InputNode;
-import br.com.etyllica.loader.collada.node.VerticesNode;
 
 public class ColladaParser extends DefaultHandler {
 
@@ -27,6 +26,7 @@ public class ColladaParser extends DefaultHandler {
     private static final String LINES = "lines";
     private static final String PRIMITIVE = "p";
     private static final String INPUT = "input";
+    private static final String ACCESSOR = "accessor";
 
     private static final String ATTRIBUTE_COUNT = "count";
     private static final String ATTRIBUTE_MATERIAL = "material";
@@ -43,12 +43,14 @@ public class ColladaParser extends DefaultHandler {
     private String sourceId;
     private String currentId;
     private int count;
+    private int accessorCount;
 
     private String currentPrimitive = TRIANGLES;
 
     private Group currentGroup;
     private GeometryNode currentGeometry;
     private VerticesNode currentVertices;
+    private SourceNode currentSource;
 
     private VBO vbo = new VBO();
 
@@ -58,14 +60,16 @@ public class ColladaParser extends DefaultHandler {
     private List<Float> vertices = new ArrayList<Float>();
 
     int partsCount = 0;
-    StringBuilder builder = new StringBuilder();
+
+    StringBuilder floatBuilder = new StringBuilder();
+    StringBuilder triangleBuilder = new StringBuilder();
 
     @Override
     public void startElement(String uri, String localName, String qName, Attributes attributes) throws SAXException {
         lastName = currentName;
         currentName = qName;
 
-        //System.out.println("<" + qName + ">");
+        System.out.println("<" + qName + ">");
 
         if (GEOMETRY.equals(qName)) {
             String id = attributes.getValue("id");
@@ -73,10 +77,13 @@ public class ColladaParser extends DefaultHandler {
             currentGroup = new Group(id);
             geometries.put(id, currentGeometry);
         } else if (SOURCE.equals(qName)) {
-            sourceId = attributes.getValue("id");
+            currentSource = new SourceNode();
+            currentSource.id = attributes.getValue("id");
+
+            currentGeometry.sources.put("#"+currentSource.id, currentSource);
         } else if (FLOAT_ARRAY.equals(qName)) {
             currentId = attributes.getValue("id");
-            System.out.print("(ID:" + currentId+ ")");
+            System.out.print("(ID:" + currentId + ")");
             count = Integer.parseInt(attributes.getValue(ATTRIBUTE_COUNT));
 
             System.out.println("VertexSize: " + vertices.size());
@@ -92,16 +99,30 @@ public class ColladaParser extends DefaultHandler {
             currentPrimitive = LINES;
         } else if (VERTICES.equals(qName)) {
             currentId = attributes.getValue("id");
-            //System.out.println("Id: " + currentId);
+
             currentVertices = new VerticesNode();
+        } else if (ACCESSOR.equals(qName)) {
+            AccessorNode accessorNode = new AccessorNode();
+            accessorNode.count = Integer.parseInt(attributes.getValue("count"));
+            accessorNode.source = attributes.getValue(SOURCE);
+            accessorNode.stride = Integer.parseInt(attributes.getValue("stride"));
+
+            currentSource.accessor = accessorNode;
+
         } else if (INPUT.equals(qName)) {
             InputNode input = parseInput(attributes);
 
             if (VERTICES.equals(lastName)) {
+
                 if (SEMANTIC_POSITION.equals(input.semantic)) {
                     String sourceId = input.source;
-                    float[] array = currentGeometry.floatArrays.get(sourceId);
+                    SourceNode source = currentGeometry.sources.get(sourceId);
+                    float[] array = source.floatArray;
+                    AccessorNode accessor = source.accessor;
+
                     currentVertices.position = array;
+                    //TODO Create Vertices
+
                 } else if (SEMANTIC_NORMAL.equals(input.semantic)) {
                     String sourceId = input.source;
                     float[] array = currentGeometry.floatArrays.get(sourceId);
@@ -140,13 +161,13 @@ public class ColladaParser extends DefaultHandler {
 
         if (FLOAT_ARRAY.equals(currentName)) {
             text = fixLine(text);
-            if(text.isEmpty())
+            if (text.isEmpty())
                 return;
             parseFloatArray(text);
         } else if (PRIMITIVE.equals(currentName)) {
             if (TRIANGLES.equals(currentPrimitive)) {
                 text = fixLine(text);
-                if(text.isEmpty())
+                if (text.isEmpty())
                     return;
                 parseTriangles(text);
             } else if (LINES.equals(currentPrimitive)) {
@@ -156,7 +177,7 @@ public class ColladaParser extends DefaultHandler {
     }
 
     private String fixLine(String line) {
-        if(line.startsWith("\n")) {
+        if (line.startsWith("\n")) {
             return line.replaceAll("\n", "").trim();
         }
         return line;
@@ -168,16 +189,16 @@ public class ColladaParser extends DefaultHandler {
 
         System.out.println((partsCount + partsLength) + "/" + count + "(*" + inputsCount + "*3) = " + (count * inputsCount * 3));
 
-        String string;
+        triangleBuilder.append(text);
 
         if (partsCount + partsLength < count * inputsCount * 3) {
-            builder.append(text);
+            partsLength--;
             partsCount += partsLength;
             return;
-        } else {
-            builder.append(text);
-            string = builder.toString();
         }
+
+        String string = triangleBuilder.toString();
+        triangleBuilder = new StringBuilder();
 
         String[] parts = string.split(" ");
 
@@ -209,63 +230,42 @@ public class ColladaParser extends DefaultHandler {
         vbo.getGroups().add(currentGroup);
 
         partsCount = 0;
-        builder = new StringBuilder();
+        triangleBuilder = new StringBuilder();
     }
-
-    StringBuilder floatBuilder = new StringBuilder();
 
     private void parseFloatArray(String text) {
         int partsLength = countParts(text);
 
         System.out.println((partsCount + partsLength) + "/" + count);
 
+        floatBuilder.append(text);
+
         if (partsCount + partsLength < count) {
-            //TODO
-            //Count is always adding 1 part in append
-            String[] parts = text.split(" ");
-            floatBuilder.append(text);
-
-            /*if(!text.endsWith(" ")) {
-                partsLength--;
-            }*/
             partsLength--;
-
             partsCount += partsLength;
             return;
-        } else {
-            String[] parts = text.split(" ");
-            floatBuilder.append(text);
         }
 
         String string = floatBuilder.toString();
         floatBuilder = new StringBuilder();
-
-        partsLength = countParts(text);
-
-        System.out.println("REAL PARSING: " + (partsCount + partsLength) + "/" + count);
 
         String[] parts = string.split(" ");
         float[] array = new float[count];
 
         int i = 0;
         for (; i < count; i++) {
-            try {
-                float n = Float.parseFloat(parts[i]);
-                array[i] = n;
-                vertices.add(n);
-            } catch (java.lang.NumberFormatException e) {
-                System.out.println("Index: "+i);
-                e.printStackTrace();
-            }
+            float n = Float.parseFloat(parts[i]);
+            array[i] = n;
+            vertices.add(n);
         }
 
         currentGeometry.floatArrays.put(sourceId, array);
+        currentSource.floatArray = array;
 
         partsCount = 0;
     }
 
     private boolean hasText(String string) {
-        //string = string.trim();
         return !string.isEmpty();
     }
 
@@ -281,6 +281,10 @@ public class ColladaParser extends DefaultHandler {
             }
         }
         return count;
+    }
+
+    public VBO getVBO() {
+        return vbo;
     }
 
 }
