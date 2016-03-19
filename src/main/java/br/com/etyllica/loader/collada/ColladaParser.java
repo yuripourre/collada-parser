@@ -65,7 +65,7 @@ public class ColladaParser extends DefaultHandler {
         lastName = currentName;
         currentName = qName;
 
-        System.out.println("<" + qName + ">");
+        //System.out.println("<" + qName + ">");
 
         if (GEOMETRY.equals(qName)) {
             String id = attributes.getValue("id");
@@ -76,6 +76,7 @@ public class ColladaParser extends DefaultHandler {
             sourceId = attributes.getValue("id");
         } else if (FLOAT_ARRAY.equals(qName)) {
             currentId = attributes.getValue("id");
+            System.out.print("(ID:" + currentId+ ")");
             count = Integer.parseInt(attributes.getValue(ATTRIBUTE_COUNT));
 
             System.out.println("VertexSize: " + vertices.size());
@@ -91,7 +92,7 @@ public class ColladaParser extends DefaultHandler {
             currentPrimitive = LINES;
         } else if (VERTICES.equals(qName)) {
             currentId = attributes.getValue("id");
-            System.out.println("Id: " + currentId);
+            //System.out.println("Id: " + currentId);
             currentVertices = new VerticesNode();
         } else if (INPUT.equals(qName)) {
             InputNode input = parseInput(attributes);
@@ -155,7 +156,10 @@ public class ColladaParser extends DefaultHandler {
     }
 
     private String fixLine(String line) {
-        return line.replaceAll("\n", "").trim();
+        if(line.startsWith("\n")) {
+            return line.replaceAll("\n", "").trim();
+        }
+        return line;
     }
 
     private void parseTriangles(String text) {
@@ -219,19 +223,17 @@ public class ColladaParser extends DefaultHandler {
             //TODO
             //Count is always adding 1 part in append
             String[] parts = text.split(" ");
-            System.out.println("Part[i] " + parts[0]);
-            System.out.println("Part[F] " + parts[parts.length - 1]);
             floatBuilder.append(text);
 
-            if(!text.endsWith(" ")) {
+            /*if(!text.endsWith(" ")) {
                 partsLength--;
-            }
+            }*/
+            partsLength--;
+
             partsCount += partsLength;
             return;
         } else {
             String[] parts = text.split(" ");
-            System.out.println("Part[i] " + parts[0]);
-            System.out.println("Part[F] " + parts[parts.length - 1]);
             floatBuilder.append(text);
         }
 
@@ -247,9 +249,14 @@ public class ColladaParser extends DefaultHandler {
 
         int i = 0;
         for (; i < count; i++) {
-            float n = Float.parseFloat(parts[i]);
-            array[i] = n;
-            vertices.add(n);
+            try {
+                float n = Float.parseFloat(parts[i]);
+                array[i] = n;
+                vertices.add(n);
+            } catch (java.lang.NumberFormatException e) {
+                System.out.println("Index: "+i);
+                e.printStackTrace();
+            }
         }
 
         currentGeometry.floatArrays.put(sourceId, array);
