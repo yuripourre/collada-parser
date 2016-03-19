@@ -2,6 +2,11 @@
 .classpath
 .project
 
+#IntelliJ
+*.iml
+src/.idea/*
+src/.settings/*
+
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
