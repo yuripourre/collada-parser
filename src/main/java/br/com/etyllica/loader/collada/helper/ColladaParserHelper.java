@@ -11,11 +11,13 @@ import java.util.List;
 public class ColladaParserHelper {
 
     public static void parseVertex3D(SourceNode source, float[] array, List<Vector3> list) {
+        boolean empty = list.isEmpty();
+
         for (int i = 0; i < source.accessor.count; i++) {
 
             Vector3 v;
 
-            if (!list.isEmpty()) {
+            if (empty) {
                 v = new Vector3();
             } else {
                 v = list.get(i);
@@ -25,7 +27,7 @@ public class ColladaParserHelper {
             v.y = array[i*1];
             v.z = array[i*2];
 
-            if (!list.isEmpty()) {
+            if (empty) {
                 list.add(v);
             }
         }

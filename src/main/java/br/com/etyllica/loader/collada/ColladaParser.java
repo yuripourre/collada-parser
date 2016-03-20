@@ -8,7 +8,6 @@ import java.util.Map;
 
 import br.com.etyllica.loader.collada.helper.ColladaParserHelper;
 import br.com.etyllica.loader.collada.node.*;
-import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
@@ -56,8 +55,9 @@ public class ColladaParser extends DefaultHandler {
 
     List<Vector3> vertices = new ArrayList<Vector3>();
     List<Vector3> normals = new ArrayList<Vector3>();
-    /*List<Vector3> currentVerticePosition = new ArrayList<Vector3>();
-    List<Vector3> currentVerticeNormal = new ArrayList<Vector3>();*/
+
+    List<Vector3> currentVerticesList = new ArrayList<Vector3>();
+    List<Vector3> currentNormalsList = new ArrayList<Vector3>();
 
     private VBO vbo = new VBO();
 
@@ -94,6 +94,7 @@ public class ColladaParser extends DefaultHandler {
 
             System.out.println("VertexSize: " + vertices.size());
             sourceOffsets.put(sourceId, vertices.size());
+            currentSource.floatArrayId = currentId;
         } else if (TRIANGLES.equals(qName)) {
             currentPrimitive = TRIANGLES;
 
@@ -106,6 +107,15 @@ public class ColladaParser extends DefaultHandler {
         } else if (VERTICES.equals(qName)) {
             currentId = attributes.getValue("id");
             currentVertices = new VerticesNode();
+
+            if(!currentVerticesList.isEmpty()) {
+                vertices.addAll(currentVerticesList);
+            } else if(!currentNormalsList.isEmpty()) {
+                vertices.addAll(currentNormalsList);
+            }
+
+            currentVerticesList = new ArrayList<Vector3>();
+            currentNormalsList = new ArrayList<Vector3>();
 
         } else if (ACCESSOR.equals(qName)) {
             AccessorNode accessorNode = new AccessorNode();
@@ -165,11 +175,11 @@ public class ColladaParser extends DefaultHandler {
     }
 
     private void parsePositionVertex3D(SourceNode source, float[] array) {
-        ColladaParserHelper.parseVertex3D(source, array, vertices);
+        ColladaParserHelper.parseVertex3D(source, array, currentVerticesList);
     }
 
     private void parseNormalVertex3D(SourceNode source, float[] array) {
-        ColladaParserHelper.parseVertex3D(source, array, normals);
+        ColladaParserHelper.parseVertex3D(source, array, currentNormalsList);
     }
 
     private void parsePositionVertex2D(SourceNode source, float[] array) {
@@ -263,9 +273,9 @@ public class ColladaParser extends DefaultHandler {
                     face.normalIndex[2] = Integer.parseInt(parts[i + 2 * inputsCount + offset])+vertexOffset;
                 } else if (SEMANTIC_TEXTCOORD.equals(input.semantic)) {
                     vertexOffset = currentSource.offsetTexture;
-                    face.textureIndex[0] = Integer.parseInt(parts[i + 0 * inputsCount + offset]);
-                    face.textureIndex[1] = Integer.parseInt(parts[i + 1 * inputsCount + offset]);
-                    face.textureIndex[2] = Integer.parseInt(parts[i + 2 * inputsCount + offset]);
+                    face.textureIndex[0] = Integer.parseInt(parts[i + 0 * inputsCount + offset])+vertexOffset;
+                    face.textureIndex[1] = Integer.parseInt(parts[i + 1 * inputsCount + offset])+vertexOffset;
+                    face.textureIndex[2] = Integer.parseInt(parts[i + 2 * inputsCount + offset])+vertexOffset;
                 }
             }
 
