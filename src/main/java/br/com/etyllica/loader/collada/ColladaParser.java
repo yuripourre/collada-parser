@@ -8,6 +8,7 @@ import java.util.Map;
 
 import br.com.etyllica.loader.collada.helper.ColladaParserHelper;
 import br.com.etyllica.loader.collada.node.*;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
@@ -55,9 +56,8 @@ public class ColladaParser extends DefaultHandler {
 
     List<Vector3> vertices = new ArrayList<Vector3>();
     List<Vector3> normals = new ArrayList<Vector3>();
+    List<Vector2> textures = new ArrayList<Vector2>();
 
-    List<Vector3> currentVerticesList = new ArrayList<Vector3>();
-    List<Vector3> currentNormalsList = new ArrayList<Vector3>();
 
     private VBO vbo = new VBO();
 
@@ -97,7 +97,6 @@ public class ColladaParser extends DefaultHandler {
             currentSource.floatArrayId = currentId;
         } else if (TRIANGLES.equals(qName)) {
             currentPrimitive = TRIANGLES;
-
             inputs.clear();
             //Face Group
             String material = attributes.getValue(ATTRIBUTE_MATERIAL);
@@ -107,16 +106,6 @@ public class ColladaParser extends DefaultHandler {
         } else if (VERTICES.equals(qName)) {
             currentId = attributes.getValue("id");
             currentVertices = new VerticesNode();
-
-            if(!currentVerticesList.isEmpty()) {
-                vertices.addAll(currentVerticesList);
-            } else if(!currentNormalsList.isEmpty()) {
-                vertices.addAll(currentNormalsList);
-            }
-
-            currentVerticesList = new ArrayList<Vector3>();
-            currentNormalsList = new ArrayList<Vector3>();
-
         } else if (ACCESSOR.equals(qName)) {
             AccessorNode accessorNode = new AccessorNode();
             accessorNode.count = Integer.parseInt(attributes.getValue("count"));
@@ -141,9 +130,15 @@ public class ColladaParser extends DefaultHandler {
 
                     //3d vector
                     if (accessor.stride == 3) {
-                        parsePositionVertex3D(source, array);
+                        List<Vector3> list = new ArrayList<Vector3>(accessor.count);
+                        ColladaParserHelper.parseVertex3D(source, array, list);
+                        vertices.addAll(list);
                     } else if (accessor.stride == 2) {
-                        //parsePositionVertex2D(source, array);
+                        List<Vector2> list = new ArrayList<Vector2>(accessor.count);
+                        ColladaParserHelper.parseVertex2D(source, array, list);
+                        for (Vector2 v : list) {
+                            vertices.add(new Vector3(v.x, v.y, 0));
+                        }
                     }
 
                 } else if (SEMANTIC_NORMAL.equals(input.semantic)) {
@@ -157,9 +152,28 @@ public class ColladaParser extends DefaultHandler {
                     currentVertices.normal = array;
 
                     if (accessor.stride == 3) {
-                        parseNormalVertex3D(source, array);
+                        List<Vector3> list = new ArrayList<Vector3>(accessor.count);
+                        ColladaParserHelper.parseVertex3D(source, array, list);
+                        normals.addAll(list);
                     } else if (accessor.stride == 2) {
-                        //parsePositionVertex2D(source, array);
+                        List<Vector2> list = new ArrayList<Vector2>(accessor.count);
+                        ColladaParserHelper.parseVertex2D(source, array, list);
+                        for (Vector2 v : list) {
+                            normals.add(new Vector3(v.x, v.y, 0));
+                        }
+                    }
+                } else if (SEMANTIC_TEXTCOORD.equals(input.semantic)) {
+                    String sourceId = input.source;
+                    SourceNode source = currentGeometry.sources.get(sourceId);
+                    source.offsetTexture = textures.size();
+                    float[] array = source.floatArray;
+
+                    AccessorNode accessor = source.accessor;
+
+                    if (accessor.stride == 2) {
+                        List<Vector2> list = new ArrayList<Vector2>(accessor.count);
+                        ColladaParserHelper.parseVertex2D(source, array, list);
+                        textures.addAll(list);
                     }
                 }
             } else {
@@ -172,34 +186,7 @@ public class ColladaParser extends DefaultHandler {
     public void endDocument() {
         vbo.getVertices().addAll(vertices);
         vbo.getNormals().addAll(normals);
-    }
-
-    private void parsePositionVertex3D(SourceNode source, float[] array) {
-        ColladaParserHelper.parseVertex3D(source, array, currentVerticesList);
-    }
-
-    private void parseNormalVertex3D(SourceNode source, float[] array) {
-        ColladaParserHelper.parseVertex3D(source, array, currentNormalsList);
-    }
-
-    private void parsePositionVertex2D(SourceNode source, float[] array) {
-        /*for (int i = 0; i < source.accessor.count; i++) {
-
-            Vector2 v;
-
-            if (!currentVerticePosition.isEmpty()) {
-                v = new Vector2();
-            } else {
-                v = currentVerticePosition.get(i);
-            }
-
-            v.x = array[i*0];
-            v.y = array[i*1];
-
-            if (!currentVerticePosition.isEmpty()) {
-                currentVerticePosition.add(v);
-            }
-        }*/
+        vbo.getTextures().addAll(textures);
     }
 
     @Override
@@ -263,19 +250,19 @@ public class ColladaParser extends DefaultHandler {
 
                 if (SEMANTIC_VERTEX.equals(input.semantic)) {
                     vertexOffset = currentSource.offsetPosition;
-                    face.vertexIndex[0] = Integer.parseInt(parts[i + 0 * inputsCount + offset])+vertexOffset;
-                    face.vertexIndex[1] = Integer.parseInt(parts[i + 1 * inputsCount + offset])+vertexOffset;
-                    face.vertexIndex[2] = Integer.parseInt(parts[i + 2 * inputsCount + offset])+vertexOffset;
+                    face.vertexIndex[0] = Integer.parseInt(parts[i + 0 * inputsCount + offset]) + vertexOffset;
+                    face.vertexIndex[1] = Integer.parseInt(parts[i + 1 * inputsCount + offset]) + vertexOffset;
+                    face.vertexIndex[2] = Integer.parseInt(parts[i + 2 * inputsCount + offset]) + vertexOffset;
                 } else if (SEMANTIC_NORMAL.equals(input.semantic)) {
                     vertexOffset = currentSource.offsetNormal;
-                    face.normalIndex[0] = Integer.parseInt(parts[i + 0 * inputsCount + offset])+vertexOffset;
-                    face.normalIndex[1] = Integer.parseInt(parts[i + 1 * inputsCount + offset])+vertexOffset;
-                    face.normalIndex[2] = Integer.parseInt(parts[i + 2 * inputsCount + offset])+vertexOffset;
+                    face.normalIndex[0] = Integer.parseInt(parts[i + 0 * inputsCount + offset]) + vertexOffset;
+                    face.normalIndex[1] = Integer.parseInt(parts[i + 1 * inputsCount + offset]) + vertexOffset;
+                    face.normalIndex[2] = Integer.parseInt(parts[i + 2 * inputsCount + offset]) + vertexOffset;
                 } else if (SEMANTIC_TEXTCOORD.equals(input.semantic)) {
                     vertexOffset = currentSource.offsetTexture;
-                    face.textureIndex[0] = Integer.parseInt(parts[i + 0 * inputsCount + offset])+vertexOffset;
-                    face.textureIndex[1] = Integer.parseInt(parts[i + 1 * inputsCount + offset])+vertexOffset;
-                    face.textureIndex[2] = Integer.parseInt(parts[i + 2 * inputsCount + offset])+vertexOffset;
+                    face.textureIndex[0] = Integer.parseInt(parts[i + 0 * inputsCount + offset]) + vertexOffset;
+                    face.textureIndex[1] = Integer.parseInt(parts[i + 1 * inputsCount + offset]) + vertexOffset;
+                    face.textureIndex[2] = Integer.parseInt(parts[i + 2 * inputsCount + offset]) + vertexOffset;
                 }
             }
 
@@ -285,7 +272,6 @@ public class ColladaParser extends DefaultHandler {
         vbo.getGroups().add(currentGroup);
 
         partsCount = 0;
-        triangleBuilder = new StringBuilder();
     }
 
     private void parseFloatArray(String text) {
@@ -323,7 +309,7 @@ public class ColladaParser extends DefaultHandler {
         return !string.isEmpty();
     }
 
-    public static int countParts(String text) {
+    private static int countParts(String text) {
         return countOccurrences(text, ' ') + 1;
     }
 

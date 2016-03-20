@@ -34,6 +34,7 @@ public class XMLReader {
 
         VBO vbo = colladaParser.getVBO();
         printVBO(vbo);
+
     }
 
     private static void printVBO(VBO vbo) {
